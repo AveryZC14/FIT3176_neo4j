@@ -1,0 +1,39 @@
+AUS, Australia
+AUT, Austria
+BEL, Belgium
+CAN, Canada
+HUN, Hungary
+CZE, Czechia
+DNK, Denmark
+FIN, Finland
+FRA, France
+DEU, Germany
+GRC, Greece
+ISL, Iceland
+IRL, Ireland
+ITA, Italy
+JPN, Japan
+KOR, Korea
+LUX, Luxembourg
+MEX, Mexico
+NLD, Netherlands
+NZL, New Zealand
+GBR, United Kingdom
+NOR, Norway
+POL, Poland
+PRT, Portugal
+SVK, Slovak Republic
+ESP, Spain
+SWE, Sweden
+CHE, Switzerland
+TUR, Türkiye
+USA, United States
+CHL, Chile
+COL, Colombia
+CRI, Costa Rica
+EST, Estonia
+ISR, Israel
+LVA, Latvia
+LTU, Lithuania
+SVN, Slovenia
+OAVG, OECD - Average
