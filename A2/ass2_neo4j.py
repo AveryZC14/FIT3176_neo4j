@@ -33,19 +33,6 @@ def delete_all_data():
 
 # DO NOT DELETE THE CODE ABOVE
 
-def print_results(result):
-    print("#" * 40)
-    print("               RESULTS")
-    print("#" * 40)
-    c = 0
-    for record in result:
-        c+=1
-        # print(c)
-        print("-" * 40)
-        for key, value in record.items():
-            print(f"{key}: {value}")    
-    print("-" * 40)
-
 # Task 1: Function to recreate the database by deleting all data and populating it with new data
 def recreate_database():
     # Load data from the ./listings_cleaned.json file
@@ -57,13 +44,19 @@ def recreate_database():
 
     # Write your code to create the database here.
     # Feel free to create new functions that this function calls to recreate the database
+    
+    #process each listing
     for listing in data[:]:
         process_listing(listing)
 
+
 def process_listing(listing):
+    #this function processes a single row of the json
+    
+    
     #create the listing
-    #TODO: LISTING LOCATION
     session.run("""
+        //using merge ensures no duplicates
         MERGE (l:Listing {id:$id, name:$name, price:$price, location: point({longitude: $long, latitude: $lat}) })
         MERGE (n:Neighbourhood {name:$nbh})
         MERGE (l) -[:LOCATED_IN]-> (n)
@@ -75,15 +68,20 @@ def process_listing(listing):
     long = listing["longitude"],
     lat = listing["latitude"],
     nbh = listing["neighbourhood"],
-    h_id = listing["host_id"], h_name = listing["host_name"],
+    h_id = listing["host_id"], 
+    h_name = listing["host_name"],
     h_location = listing["host_location"] or "", 
-    h_super = (listing["host_is_superhost"] == "t"))
+    h_super = (listing["host_is_superhost"] == "t")) #quick lambda to change "t" into True and other values to False
 
     amenities = []
+    # safety check for listings with no amenities attribute
     if "amenities" in listing:
         amenities = listing["amenities"]
+        
+    # add each amenity
     for amenity in amenities:
         session.run("""
+            //We match because we're looking for an existing listing to attach these amenities to
             MATCH (l:Listing {id: $l_id})
             MERGE (a:Amenity {name: $amenity})
             MERGE (l) -[:HAS_AMENITY]-> (a)
@@ -102,6 +100,7 @@ def task2():
         ORDER BY COUNT(l1) DESC, n.name ASC
         LIMIT 1
         
+        //match out the listings that appear in the most popular neighbourhood
         MATCH (l2:Listing) -[:LOCATED_IN]-> (popular_n)
         RETURN l2.id as l_id, 
             l2.name as l_name, 
@@ -117,12 +116,14 @@ def task2():
     result = res.single()
     result_dict = dict(result.items())
     
+    #get variables from the dict
     listing_id = result_dict["l_id"]
     listing_name = result_dict["l_name"]
     listing_price = result_dict["l_price"]
     neighbourhood_name = result_dict["n_name"]
     neighbourhood_listing_count = result_dict["n_count"]
     
+    #print in the correct format
     print(
         f"""Neighbourhood with the highest number of listings: {neighbourhood_name} (Total Listings: {neighbourhood_listing_count})
 Most expensive listing in {neighbourhood_name}:
@@ -133,10 +134,12 @@ Listing: ID: {listing_id}, Name: {listing_name}, Price: ${listing_price}
 def task3(neighbourhood, distance_km):
     # Find the most expensive listing in the specified neighbourhood, with ties broken by listing_id (smaller is better).
     # Find other listingsss within distance_km of the most expensive listing and print the 3-lowest priced ones, with ties broken by distance
+    
+    #query to get the most expensive listing
     expensive_res = session.run("""
         MATCH (l1:Listing) -[:LOCATED_IN]-> (n:Neighbourhood {name:$nbh}),
-            (h1:Host) -[:HOSTS]-> (l1)
-        return l1.name as l1_name, 
+            (h1:Host) -[:HOSTS]-> (l1) //also get the host
+        RETURN l1.name as l1_name, 
             l1.id as l1_id, 
             l1.price as l1_price, 
             h1.name as h1_name
@@ -146,22 +149,27 @@ def task3(neighbourhood, distance_km):
     nbh = neighbourhood,
     max_dist = distance_km*1000)
     
+    #get the singular record out
     exp_result = expensive_res.single()
-    # print(exp_result)
     
     if exp_result == None:
         print(f"No listings found in the neighbourhood ’{neighbourhood}’")
         return
+
+    #turn into a dictionary and get the variables out
     exp_listing = dict(exp_result.items())
     
     l1_id = exp_listing["l1_id"]
     l1_name = exp_listing["l1_name"]
     l1_price = exp_listing["l1_price"]
     l1_host = exp_listing["h1_name"]
+    
+    # print in the correct format
     print(f"Most expensive listing in {neighbourhood}: ID: {l1_id}, Name: {l1_name} (Price: ${l1_price}, Host: {l1_host})")
         
-        
+    #query for the other listings
     others_res = session.run("""
+        //quick match to get the most expensive listing as l1
         MATCH (l1:Listing {id:$exp_id})
         WITH l1
         LIMIT 1
@@ -174,25 +182,32 @@ def task3(neighbourhood, distance_km):
             l2.id as l2_id, 
             l2.price as l2_price, 
             h2.name as h2_name,
+            //divide by 1000 to get it back into km and round to 2 decimal places
             round(point.distance(l1.location, l2.location)/1000, 2) as dist
         ORDER BY l2.price ASC, point.distance(l1.location, l2.location) ASC, l2.id ASC
         LIMIT 3
     """,
     exp_id = l1_id,
     nbh = neighbourhood,
-    max_dist = distance_km*1000)
+    max_dist = distance_km*1000)# multiply distance by 1000 to get it into meters
     
+    #check if there are any others
     if (others_res.peek()) == None:
         print(f"No listings found within {distance_km} km of ’{l1_name}’.")
+        
     else:
         print(f"Listings within {distance_km} km of ’{l1_name}’ with the lowest prices:")
+        
         for result in (others_res):
+            #get the variables out and print
             result_dict = dict(result)
+            
             l2_id = result_dict["l2_id"]
             l2_name = result_dict["l2_name"]
             l2_price = result_dict["l2_price"]
             l2_host = result_dict["h2_name"]
             dist = result_dict["dist"]
+            
             print(f"Listing: ID: {l2_id}, Name: {l2_name}, Price: ${l2_price}, Host: {l2_host}, Distance: {dist} km")
 
 # Main function that controls the flow of the script
@@ -204,18 +219,8 @@ def main():
 
         # Uncomment the following line to recreate the database from scratch
         # recreate_database()
-        # task2()
+        task2()
         task3("Melbourne", 10)
-        print("\n")
-        task3("Melbourne", 100)
-        print("\n")
-        task3("Monash", 10)
-        print("\n")
-        task3("Moreland",10)
-        print("\n")
-        task3("Casey", 10)
-        print("\n")
-        task3("Clayton", 10)
         
 
 # Run the main function
