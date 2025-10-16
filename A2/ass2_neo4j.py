@@ -133,19 +133,43 @@ Listing: ID: {listing_id}, Name: {listing_name}, Price: ${listing_price}
 def task3(neighbourhood, distance_km):
     # Find the most expensive listing in the specified neighbourhood, with ties broken by listing_id (smaller is better).
     # Find other listingsss within distance_km of the most expensive listing and print the 3-lowest priced ones, with ties broken by distance
-    res = session.run("""
+    expensive_res = session.run("""
         MATCH (l1:Listing) -[:LOCATED_IN]-> (n:Neighbourhood {name:$nbh}),
             (h1:Host) -[:HOSTS]-> (l1)
-        WITH l1, h1
+        return l1.name as l1_name, 
+            l1.id as l1_id, 
+            l1.price as l1_price, 
+            h1.name as h1_name
         ORDER BY l1.price DESC, l1.id ASC
+        LIMIT 1
+    """,
+    nbh = neighbourhood,
+    max_dist = distance_km*1000)
+    
+    exp_result = expensive_res.single()
+    # print(exp_result)
+    
+    if exp_result == None:
+        print(f"No listings found in the neighbourhood ’{neighbourhood}’")
+        return
+    exp_listing = dict(exp_result.items())
+    
+    l1_id = exp_listing["l1_id"]
+    l1_name = exp_listing["l1_name"]
+    l1_price = exp_listing["l1_price"]
+    l1_host = exp_listing["h1_name"]
+    print(f"Most expensive listing in {neighbourhood}: ID: {l1_id}, Name: {l1_name} (Price: ${l1_price}, Host: {l1_host})")
+        
+        
+    others_res = session.run("""
+        MATCH (l1:Listing {id:$exp_id})
+        WITH l1
         LIMIT 1
         
         MATCH (l2:Listing), (h2:Host) -[:HOSTS]-> (l2)
         WHERE point.distance(l1.location, l2.location) < $max_dist
-        RETURN l1.name as l1_name, 
-            l1.id as l1_id, 
-            l1.price as l1_price, 
-            h1.name as h1_name,
+        AND NOT l1.id = l2.id
+        RETURN
             l2.name as l2_name,
             l2.id as l2_id, 
             l2.price as l2_price, 
@@ -154,10 +178,22 @@ def task3(neighbourhood, distance_km):
         ORDER BY l2.price ASC, point.distance(l1.location, l2.location) ASC, l2.id ASC
         LIMIT 3
     """,
+    exp_id = l1_id,
     nbh = neighbourhood,
     max_dist = distance_km*1000)
-    print_results(res)
-
+    
+    if (others_res.peek()) == None:
+        print(f"No listings found within {distance_km} km of ’{l1_name}’.")
+    else:
+        print(f"Listings within {distance_km} km of ’{l1_name}’ with the lowest prices:")
+        for result in (others_res):
+            result_dict = dict(result)
+            l2_id = result_dict["l2_id"]
+            l2_name = result_dict["l2_name"]
+            l2_price = result_dict["l2_price"]
+            l2_host = result_dict["h2_name"]
+            dist = result_dict["dist"]
+            print(f"Listing: ID: {l2_id}, Name: {l2_name}, Price: ${l2_price}, Host: {l2_host}, Distance: {dist} km")
 
 # Main function that controls the flow of the script
 def main():
@@ -168,8 +204,19 @@ def main():
 
         # Uncomment the following line to recreate the database from scratch
         # recreate_database()
-        task2()
-        task3("Melbourne", 5)
+        # task2()
+        task3("Melbourne", 10)
+        print("\n")
+        task3("Melbourne", 100)
+        print("\n")
+        task3("Monash", 10)
+        print("\n")
+        task3("Moreland",10)
+        print("\n")
+        task3("Casey", 10)
+        print("\n")
+        task3("Clayton", 10)
+        
 
 # Run the main function
 if __name__ == "__main__":
